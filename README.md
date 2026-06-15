@@ -29,9 +29,9 @@ Lastly, this function should return an `NTSTATUS` value.
 
 If we were to attempt to compile the previous snippet on Visual Studio 2026, we would get a warning preventing the final build.
 
-- *Remarks*: With Kernel Driver Development, any warning is treated as an Error, this behaviour can be overriden or disabled although it is not recommended.
+- *Remarks*: With Kernel Driver Development, any Warning is treated as an Error, this behaviour can be overriden or disabled although it is not recommended.
 
-The warning is arised, because the `DriverObject` and the `RegistryPath` were declared within the entry point but never used. The `UNREFERENCED_PARAMETER()` macro can be used in this situations to suppress the warning:
+The warning is raised because `DriverObject` and `RegistryPath` are declared within the driver's entry point but never used. The `UNREFERENCED_PARAMETER()` macro can be used in these situations to explicitly mark these parameters as unused and suppress the compiler warning:
 
 ```c
 #include <ntddk.h>
@@ -49,11 +49,11 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 }
 ```
 
-Our initial basic Driver (Hello World) is now complete. After disabling the driver-signing policy, one can load the driver using the Service Configuration built-in tool `sc.exe`, and view the kernel traces with [`DebugView.exe`](https://learn.microsoft.com/es-es/sysinternals/downloads/debugview) from sysinternals.
+Our initial basic driver (HelloWorld.sys) is now complete. After disabling the driver-signing policy, one can load the driver using the Service Configuration built-in tool `sc.exe`, and view the kernel traces with [`DebugView.exe`](https://learn.microsoft.com/es-es/sysinternals/downloads/debugview) from sysinternals.
 
 **Unload** routine:
 
-Attempting to stop the previous kernel will fail. This is because we have not declared the Unload routine.
+Attempting to stop the previous kernel driver will fail. This is because we have not declared the Unload routine.
 
 - `PDRIVER_OBJECT->DriverUnload`: The *entry point for the driver's Unload routine*, if any, which is set by the `DriverEntry` routine when the driver initializes. If a driver has no Unload routine, this member is `NULL`.
 
