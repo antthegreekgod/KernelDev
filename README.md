@@ -9,6 +9,8 @@ Current goals:
 
 ##  Driver Structure
 
+### HelloWorld.sys
+
 **Entry Point** calling convention:
 
 ```c
@@ -78,6 +80,133 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 ```
 - *Remarks*: The Unload routine must return `VOID` and by calling convention it receives the `DEVICE_OBJECT` object.
 
+### Interacting with a Driver from User-Land
+
+User-Land programs can interact with Kernel Mode Drivers via "device" objects. These devices must be registered and later exposed via SymLink creation:
+
+- `IoCreateDevice`: The IoCreateDevice routine creates a device object for use by a driver.
+- `IoCreateSymbolicLink`: The IoCreateSymbolicLink routine sets up a symbolic link between a device object name and a user-visible name for the device.
+
+*"The other important set of operations to initialize is called Dispatch Routines. This is an array of function pointers, in the MajorFunction member of `DRIVER_OBJECT`."* This routines define which kind of operations are supported by the Driver.
+
+We will start by covering the following:
+
+- `IRP_MJ_CREATE`: Allows opening a handle to a driver's device object.
+- `IRP_MJ_CLOSE`: Allows closing a handle to a driver's device object.
+- `IRP_MJ_DEVICE_CONTROL`: Processes device-specific I/O control requests issued by user-mode applications via the `DeviceIoControl` Win32 API.
+
+```c
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
+    
+    NTSTATUS STATUS = STATUS_SUCCESS;
+    UNREFERENCED_PARAMETER(RegistryPath);
+
+    DriverObject->DriverUnload = Unload;
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = DeviceCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = DeviceCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DeviceControl;
+
+    PDEVICE_OBJECT DeviceObject;
+    UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\ProcessKiller");
+    UNICODE_STRING SymLink = RTL_CONSTANT_STRING(L"\\??\\ProcessKiller");
+
+    STATUS = IoCreateDevice(
+	    DriverObject,   // (IN PDRIVER_OBJECT) Pointer to the driver object for the caller
+	    0, // DeviceExtensionSize
+    	&DeviceName, // (IN PUNICODE_STRING) buffer containing a null-terminated Unicode string that names the device object
+    	FILE_DEVICE_UNKNOWN, // (IN DEVICE_TYPE) DeviceType
+	    0, // (IN ULONG) DeviceCharacteristics
+    	FALSE, // (IN BOOLEAN) Exclusive
+    	&DeviceObject // (OUT PDEVICE_OBJECT) Pointer to a variable that receives a pointer to the newly created DeviceObject
+        );
+
+    if (!NT_SUCCESS(STATUS))
+    {
+	    KdPrint(("[!] IoCreateDevice failed with error code: 0x%0.8X\n", STATUS));
+    	return STATUS;
+    }
+
+
+    STATUS = IoCreateSymbolicLink(
+	    &SymLink, // (IN PUNICODE_STRING) SymbolicLinkName
+	    &DeviceName); // (IN PUNICODE_STRING) DeviceName
+
+    if (!NT_SUCCESS(STATUS))
+    {
+	    KdPrint(("[!] IoCreateSymbolicLink failed with error code: 0x%0.8X\n", STATUS));
+        // in Kernel Development we need to handle correctly all exceptions to avoid BSODs and memory leaks...
+    	IoDeleteDevice(DeviceObject);
+	    return STATUS;
+    }
+
+    KdPrint(("[+] Created Device with symlink: \\??\\ProcessKiller\n"));
+    return STATUS;
+}
+```
+
+Once a driver's device has been properly exposed and initialized, a program from UserMode can use the following Win32 APIs for interaction:
+
+- `CreateFile`: Opening a handle to a device object.
+- `CloseHandle`: Closing a handle to a device object.
+- `DeviceIoControl`: Generic mechanism for passing data to and from the driver.
+
+```c
+int main(int argc, char* argv[])
+{
+	if (argc != 2)
+	{
+		printf("[!] Usage: %s <PID 2 Kill>\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+
+	ULONG PID = (ULONG)atoi(argv[1]);
+
+	printf("[+] Tasked to kill Process with PID: %lu\n", PID);
+
+	HANDLE hDevice = CreateFileA(
+		"\\\\.\\ProcessKiller", // symlink to our device object
+		GENERIC_WRITE,
+		FILE_SHARE_WRITE,
+		NULL,
+		OPEN_EXISTING,
+		0,
+		NULL
+	);
+
+	if (hDevice == INVALID_HANDLE_VALUE)
+	{
+		printf("[!] CreateFileA failed with error code: %d\n", GetLastError());
+		return EXIT_FAILURE;
+	}
+
+	DWORD dwBytesReturned;
+
+	if (!DeviceIoControl(
+		hDevice,
+		IOCTL_PROCESS_KILLER, // IOCTL Explained On Upcomming Sections
+		&PID,
+		sizeof(ULONG),
+		NULL,
+		0,
+		&dwBytesReturned,
+		NULL))
+	{
+		printf("[!] DeviceIoControl failed with error code: %d\n", GetLastError());
+		CloseHandle(hDevice);
+		return EXIT_FAILURE;
+	}
+
+	CloseHandle(hDevice);
+	printf("[+] SUCCESS!\n");
+	return EXIT_SUCCESS;
+
+}
+```
+
+The previous UserMode client uses `CreateFile` to open a handle to the ProcesKiller Device, and later uses `DeviceIoControl` to send a buffer to the Kernel Mode driver. 
+
+----
 ### References
 
 - Windows Kernel Programming (author Pavel Yosifovich)

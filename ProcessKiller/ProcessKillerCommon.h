@@ -1,0 +1,4 @@
+#pragma once
+
+#define PROCESS_KILLER_DEVICE 0x8000 // default value for 3rd party drivers
+#define IOCTL_PROCESS_KILLER CTL_CODE(PROCESS_KILLER_DEVICE, 0x800, METHOD_NEITHER, FILE_ANY_ACCESS)
