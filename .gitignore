@@ -1,0 +1,28 @@
+# Build output
+Debug/
+Release/
+x64/
+x86/
+ARM/
+ARM64/
+[Bb]in/
+[Oo]bj/
+
+# Compiled files
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+
+# Visual Studio user & cache
+.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Logs & temp
+*.log
+*.tlog
