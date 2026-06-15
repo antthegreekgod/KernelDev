@@ -82,7 +82,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 
 ![HelloWorld.sys](HelloWorld/includes/HelloWorldSys.png)
 
-### Interacting with a Driver from User-Land
+### Interacting with a Driver from User-Land (ProcessKiller.sys)
 
 User-Land programs can interact with Kernel Mode Drivers via "device" objects. These devices must be registered and later exposed via SymLink creation:
 
@@ -96,6 +96,16 @@ We will start by covering the following:
 - `IRP_MJ_CREATE`: Allows opening a handle to a driver's device object.
 - `IRP_MJ_CLOSE`: Allows closing a handle to a driver's device object.
 - `IRP_MJ_DEVICE_CONTROL`: Processes device-specific I/O control requests issued by user-mode applications via the `DeviceIoControl` Win32 API.
+
+The aforementioned Major Functions have the following interface:
+
+```c
+NTSTATUS DeviceCreateClose(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp);
+
+NTSTATUS DeviceControl(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp);
+```
+
+One can now take a look at how the MajorFunction array member's can be initialized:
 
 ```c
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
@@ -206,7 +216,29 @@ int main(int argc, char* argv[])
 }
 ```
 
-The previous UserMode client uses `CreateFile` to open a handle to the ProcesKiller Device, and later uses `DeviceIoControl` to send a buffer to the Kernel Mode driver. 
+The previous `C` code sends a user-supplied PID (Process ID) to `ProcessKiller.sys`, which then terminates the corresponding process. This capability can be abused to kill EDR and antivirus processes, an action that is significantly more difficult from user mode because such security-critical processes are often protected by mechanisms such as Protected Process Light (PPL).
+
+From `ProcessKiller.sys` we now need to define the logic of our Dispatch Routines to achive such task.
+
+Let's start with the `IRP_MJ_OPEN` and `IRP_MJ_CLOSE` routines. These functions are responsible for handling the driver's device `HANDLE` creation and deletion.
+
+```c
+NTSTATUS DeviceCreateClose(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
+{
+	UNREFERENCED_PARAMETER(DeviceObject);
+
+	Irp->IoStatus.Status = STATUS_SUCCESS;
+	Irp->IoStatus.Information = 0;
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+	return STATUS_SUCCESS;
+
+}
+```
+The `IRP` (I/O Request Packet) is the structure used to communicate between the various components involved in an I/O operation. For `IRP_MJ_CREATE` and `IRP_MJ_CLOSE` requests, no special processing is required in our driver, so the routine simply sets IoStatus.Status to `STATUS_SUCCESS` and IoStatus.Information to 0, indicating that the operation completed successfully and no additional data is being returned. The request is then completed by calling `IoCompleteRequest()`, which notifies the I/O Manager that the IRP has finished processing. Finally, the dispatch routine returns `STATUS_SUCCESS` to indicate that the request was handled without errors.
+
+
+![ProcessKiller.sys](ProcessKiller/includes/killing-defender.gif)
 
 ----
 ### References
