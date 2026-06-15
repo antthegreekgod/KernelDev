@@ -9,7 +9,7 @@ Current goals:
 
 ##  Driver Structure
 
-### HelloWorld.sys
+### Building our First Driver (HelloWorld.sys)
 
 **Entry Point** calling convention:
 
@@ -79,6 +79,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 }
 ```
 - *Remarks*: The Unload routine must return `VOID` and by calling convention it receives the `DEVICE_OBJECT` object.
+
+![HelloWorld.sys](HelloWorld/includes/HelloWorldSys.png)
 
 ### Interacting with a Driver from User-Land
 
