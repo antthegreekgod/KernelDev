@@ -226,7 +226,7 @@ Special attention to the `DeviceIoControl` API, which sends a control code (`IOC
 
 ----
 
-Going back to the driver development, from `ProcessKiller.sys` we now need to define the logic of our Dispatch Routines to achive such task.
+Going back to the driver development, from `ProcessKiller.sys` we now need to define the logic of our Dispatch Routines.
 
 Let's start with the `IRP_MJ_OPEN` and `IRP_MJ_CLOSE` routines. These functions are responsible for handling the driver's device `HANDLE` creation and deletion.
 
@@ -286,6 +286,16 @@ NTSTATUS DeviceControl(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 	return STATUS;
 }
 ```
+
+From the previous snippet, special attention to the following APIs and structures:
+
+- `IoGetCurrentIrpStackLocation`: The `IoGetCurrentIrpStackLocation` routine returns a pointer to the caller's I/O stack location in the specified `IRP`.
+
+- `(IO_STACK_LOCATION*)->Parameters.DeviceIoControl.IoControlCode`: Contains `IOCTL`.
+
+- `(IO_STACK_LOCATION*)->Parameters.DeviceIoControl.InputBufferLength`: Input buffer length.
+
+- `(IO_STACK_LOCATION*)->Parameters.DeviceIoControl.Type3InputBuffer`: Input buffer.
 
 
 ![ProcessKiller.sys](ProcessKiller/includes/killing-defender.gif)
