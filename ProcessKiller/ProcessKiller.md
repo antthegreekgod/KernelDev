@@ -4,4 +4,4 @@ Kernel-mode driver developed to demonstrate driver initialization, device creati
 
 As a proof-of-concept, the driver accepts a process identifier (PID) from user mode and uses the `ZwTerminateProcess` kernel API to terminate the specified process from kernel mode. This project illustrates basic user-to-kernel communication, `IOCTL` handling, and process management operations within a Windows kernel driver.
 
-![includes/killing-defender.gif]
+![ProcessKiller.sys](includes/killing-defender.gif)
