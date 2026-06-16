@@ -218,7 +218,15 @@ int main(int argc, char* argv[])
 
 The previous `C` code sends a user-supplied PID (Process ID) to `ProcessKiller.sys`, which then terminates the corresponding process. This capability can be abused to kill EDR and antivirus processes, an action that is significantly more difficult from user mode because such security-critical processes are often protected by mechanisms such as Protected Process Light (PPL).
 
-From `ProcessKiller.sys` we now need to define the logic of our Dispatch Routines to achive such task.
+Special attention to the `DeviceIoControl` API, which sends a control code (`IOCTL`) via its second argument to a specified device driver. Causing the corresponding device to perform the corresponding operation.
+
+----
+
+- *Remarks*: `IOCTL`s will be important during our BYOVD driver research since they expose the device control functions that a driver makes available to user-mode applications. These control codes identify operations that can be invoked from user land through `DeviceIoControl` and related interfaces.
+
+----
+
+Going back to the driver development, from `ProcessKiller.sys` we now need to define the logic of our Dispatch Routines to achive such task.
 
 Let's start with the `IRP_MJ_OPEN` and `IRP_MJ_CLOSE` routines. These functions are responsible for handling the driver's device `HANDLE` creation and deletion.
 
@@ -235,7 +243,49 @@ NTSTATUS DeviceCreateClose(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 
 }
 ```
-The `IRP` (I/O Request Packet) is the structure used to communicate between the various components involved in an I/O operation. For `IRP_MJ_CREATE` and `IRP_MJ_CLOSE` requests, no special processing is required in our driver, so the routine simply sets IoStatus.Status to `STATUS_SUCCESS` and IoStatus.Information to 0, indicating that the operation completed successfully and no additional data is being returned. The request is then completed by calling `IoCompleteRequest()`, which notifies the I/O Manager that the IRP has finished processing. Finally, the dispatch routine returns `STATUS_SUCCESS` to indicate that the request was handled without errors.
+The `IRP` (I/O Request Packet) is the structure used to communicate between the various components involved in an I/O operation. For `IRP_MJ_CREATE` and `IRP_MJ_CLOSE` requests, no special processing is required in our driver, so the routine simply sets `IoStatus.Status` to `STATUS_SUCCESS` and `IoStatus.Information` to `0`, indicating that the operation completed successfully and no additional data is being returned. The request is then completed by calling `IoCompleteRequest()`, which notifies the I/O Manager that the IRP has finished processing. Finally, the dispatch routine returns `STATUS_SUCCESS` to indicate that the request was handled without errors.
+
+On the other hand, the `IRP_MJ_DEVICE_CONTROL` dispatch routine is responsible for handling, validating, and processing device-specific I/O control requests issued by user-mode applications.
+
+In general, this routine begins by examining the requested `IOCTL` code and then validating any user-supplied input and output buffers. The information associated with the request is obtained from the `IO_STACK_LOCATION` structure referenced by the `IRP` passed to the routine. Based on the requested control code, the driver performs the corresponding operation and returns the result to the caller.
+
+```c
+NTSTATUS DeviceControl(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
+{
+	UNREFERENCED_PARAMETER(DeviceObject);
+    // retrieving IO_STACK
+	IO_STACK_LOCATION* stack = IoGetCurrentIrpStackLocation(Irp);
+	NTSTATUS STATUS = STATUS_SUCCESS;
+
+	switch (stack->Parameters.DeviceIoControl.IoControlCode)
+	{
+        // checking IOCTL
+		case IOCTL_PROCESS_KILLER:
+		{
+            // verifying user-mode supplied data
+			if (stack->Parameters.DeviceIoControl.InputBufferLength != sizeof(ULONG))
+			{
+				// we are expecting as input a ULONG representing the PID of the target process
+				STATUS = STATUS_INVALID_BUFFER_SIZE;
+				break;
+			}
+            // retrieving the actual data
+			ULONG* PID = (PULONG)(stack->Parameters.DeviceIoControl.Type3InputBuffer);
+
+            // Process Killer Logic
+
+        }
+        default: // don't forget to handle all scenarios and requests
+            STATUS = STATUS_INVALID_DEVICE_REQUEST;
+			break;
+    }
+
+    Irp->IoStatus.Information = 0;
+	Irp->IoStatus.Status = STATUS;
+	IoCompleteRequest(Irp, IO_NO_INCREMENT);
+	return STATUS;
+}
+```
 
 
 ![ProcessKiller.sys](ProcessKiller/includes/killing-defender.gif)
